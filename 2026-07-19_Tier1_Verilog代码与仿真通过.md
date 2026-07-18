@@ -75,3 +75,52 @@
 - Tier 1 上板验证（综合 → 实现 → 生成 bitstream → 烧录 → 示波器测量）
 - Tier 2：amplitude_scaler + noise_adder + LFSR + Box-Muller 高斯噪声
 - Tier 3：HDMI 显示 + AXI-Lite PS 端参数接口 + 能谱采样 + 核素数据库
+
+---
+
+## CoCode v0.2.8 修复与发布（实际时间：07-19 约 01:45 ~ 02:50 北京时间）
+
+### 工作日志系统搭建
+
+建立了个人工作日志系统：
+- 本地路径 `C:\Users\29035\01 文件夹\学习办公\00 工作日志\`，按日期命名
+- GitHub 私有仓库 `https://github.com/2903537389/work-log` 自动同步
+- Claude Code 全局规则：每次开发工作后自动记录日志，以我的第一人称视角撰写
+
+### 提示音 Hook 配置
+
+在 Claude Code 全局设置中配置了 Stop Hook：
+- 音频文件：`C:\Users\29035\Music\叮咚鸡.mp3`
+- 触发时机：每次 AI 回复完成时
+- 使用 `MediaPlayer`（PresentationCore），音量最大化
+
+### CoCode 多实例 Bug 诊断与修复
+
+**问题现象**：
+- CoCode 运行一段时间后，托盘出现第二个椰子图标
+- 新图标打开的窗口纯白无内容
+- 原来的 Hook（完成提示音）不再触发
+
+**根因分析**（源码位置 `src-tauri/src/`）：
+1. `lib.rs` 中没有 `tauri-plugin-single-instance` 插件，无单实例锁
+2. 第二次启动 CoCode 时检测不到已有实例，创建新的 Tauri 进程
+3. 新进程的 WebView2 初始化失败（user data 被第一个实例锁定），导致白屏
+4. `hooks/setup.rs:57` 用了 `SoundPlayer`（只支持 WAV），不支持 MP3，自带的提示音从未生效
+
+**修复内容**（4 个文件）：
+| 文件 | 改动 |
+|------|------|
+| `Cargo.toml` | 添加 `tauri-plugin-single-instance = "2"` |
+| `lib.rs` | 注册单实例插件，检测重复启动时聚焦已有窗口 |
+| `hooks/setup.rs` | `SoundPlayer` → `MediaPlayer`（支持 MP3），自动清理旧无效条目 |
+| `adapter.rs` | 修复已有测试中 `claude_path` 字段缺失的编译错误 |
+
+**编译发布**：
+- 版本号 0.2.7 → 0.2.8（Cargo.toml + tauri.conf.json + package.json）
+- 产物：`cocode0.2.8/CoCode_0.2.8_x64-setup.exe`（30 MB）和 MSI（71 MB）
+- 测试：8/8 hooks 测试全部通过，657 个已有测试通过（15 个预存失败与改动无关）
+
+### 杂项
+
+- 了解了 Codex CLI 与 Codex 桌面端的区别（Codex 开源仓库只有 CLI，桌面体验需 `codex app` 或 chatgpt.com）
+- CLI vs EXE 的概念区分：CLI 是交互方式（命令行），EXE 是文件格式（Windows 可执行）
