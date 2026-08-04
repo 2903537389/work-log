@@ -73,4 +73,37 @@ EK-OmniProbe 2.5.0 已内置「AI 数据桥接」（应用独占串口，AI 经 
 ## 结果
 
 - 代码仓库：`github.com/2903537389/aichuankoutool`（私有，已推送）
-- 遗留：cargo test 环境问题待排查；实机烧录（ESP32/STM32）待验证；旧空仓库 `ai-` 待删除（需 delete_repo scope）
+- 遗留：cargo test 环境问题待排查；STM32 实机烧录待验证；旧空仓库 `ai-` 待删除（需 delete_repo scope）
+
+---
+
+## 实机验证（同日，COM20 = ESP32-S3）
+
+设备是 **ESP32-S3**（CH343 转串口，COM20@115200），实机跑通了全部核心链路：
+
+| 验证项 | 结果 |
+|------|------|
+| AI 桥接控制串口（list/open/status/write/snapshot） | ✅ 全通 |
+| Agent 经桥接发送 → GUI 前台同步显示（`AI_AGENT_MSG_FROM_CLAUDE_HELLO`） | ✅ 用户 GUI 亲眼确认 |
+| TCP 透传烧录（esptool `socket://` 擦除 ESP32-S3 flash） | ✅ 2.2s 擦除成功 |
+| 后台烧录过程前台实时可见 | ✅ 全程镜像 |
+
+### 实机踩坑
+
+1. **芯片型号**：板子是 ESP32-S3 不是 ESP32，`--chip esp32` 会报 `This chip is ESP32-S3, not ESP32` → 脚本默认改 `--chip auto` 自动检测。
+2. **透传烧录必须手动复位进下载模式**：TCP 透传无 DTR/RTS 控制线，esptool 无法自动复位。流程：按住 BOOT → 点 EN → 松 BOOT，然后用 `--before no-reset --after no-reset`。若没进下载模式，esptool 会收到应用打印的字符（如 `0x65`='e'）报 `Invalid head of packet`。
+3. **socket:// 波特率**：透传模式下 esptool 无法切换波特率，`--baud` 必须与应用打开的串口波特率一致（115200）。
+
+### 改名与重打包
+
+用户 E 盘装过旧版 EK-OmniProbe，两版名字一样分不清 → 改名 **AI-Serial-Assistant** v0.1.0：
+- `productName` / `identifier`（`org.embeddedkit.omniprobe.ai`）/ 窗口标题（「AI 串口助手 · EK-OmniProbe 改造版」）独立，与旧版并存
+- 禁用 updater（fork 用不到上游更新源，消除打包签名报错）
+- 打包产物：`AI-Serial-Assistant_0.1.0_x64-setup.exe` / `_x64.exe` / `_x64_en-US.msi`（复制到项目根目录）
+
+### 完整闭环达成
+
+```
+AI Agent（Claude Code）→ serial_cli.py/client.py → AI 桥接(8765) → EK-OmniProbe 独占串口 → GUI 前台实时显示
+                                                          └→ TCP 透传(8770) → esptool socket:// 烧录，字节流同步镜像前台
+```
